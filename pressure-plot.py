@@ -1,7 +1,7 @@
 #BME280の気圧センサーをリアルタイムでプロットするコード
 # coding: utf-8
-from smbus2 import SMBus
-import matplotlib.pyplot as plt
+from smbus2 import SMBus # type: ignore
+import matplotlib.pyplot as plt # type: ignore
 import time
 
 bus_number = 1

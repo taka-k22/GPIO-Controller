@@ -1,9 +1,9 @@
 # coding: utf-8
 # BME280 センサから温度、気圧、湿度を読み取って localhost:5000/sensor_data で JSON 形式で提供する
-from smbus2 import SMBus
+from smbus2 import SMBus # type: ignore
 import time
 import threading
-from flask import Flask
+from flask import Flask # type: ignore
 
 # ---------------- Flask サーバ ----------------
 

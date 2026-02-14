@@ -1,5 +1,5 @@
 #標準入力からコマンドを受け取ってモーターを制御するサンプルコード（サーバは立てていない）
-import RPi.GPIO as GPIO
+import RPi.GPIO as GPIO # type: ignore
 import sys
 import time
 
