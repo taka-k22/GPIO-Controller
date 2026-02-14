@@ -1,9 +1,10 @@
-#coding: utf-8
+#BME280の気圧センサーをリアルタイムでプロットするコード
+# coding: utf-8
 from smbus2 import SMBus
 import matplotlib.pyplot as plt
 import time
 
-bus_number  = 1
+bus_number = 1
 i2c_address = 0x76
 bus = SMBus(bus_number)
 
@@ -13,6 +14,7 @@ t_fine = 0.0
 
 def writeReg(reg_address, data):
     bus.write_byte_data(i2c_address, reg_address, data)
+
 
 def get_calib_param():
     calib = []
@@ -27,18 +29,18 @@ def get_calib_param():
     digT.append((calib[5] << 8) | calib[4])
     digP.append((calib[7] << 8) | calib[6])
     digP.append((calib[9] << 8) | calib[8])
-    digP.append((calib[11]<< 8) | calib[10])
-    digP.append((calib[13]<< 8) | calib[12])
-    digP.append((calib[15]<< 8) | calib[14])
-    digP.append((calib[17]<< 8) | calib[16])
-    digP.append((calib[19]<< 8) | calib[18])
-    digP.append((calib[21]<< 8) | calib[20])
-    digP.append((calib[23]<< 8) | calib[22])
+    digP.append((calib[11] << 8) | calib[10])
+    digP.append((calib[13] << 8) | calib[12])
+    digP.append((calib[15] << 8) | calib[14])
+    digP.append((calib[17] << 8) | calib[16])
+    digP.append((calib[19] << 8) | calib[18])
+    digP.append((calib[21] << 8) | calib[20])
+    digP.append((calib[23] << 8) | calib[22])
     digH.append(calib[24])
-    digH.append((calib[26]<< 8) | calib[25])
+    digH.append((calib[26] << 8) | calib[25])
     digH.append(calib[27])
-    digH.append((calib[28]<< 4) | (0x0F & calib[29]))
-    digH.append((calib[30]<< 4) | ((calib[29] >> 4) & 0x0F))
+    digH.append((calib[28] << 4) | (0x0F & calib[29]))
+    digH.append((calib[30] << 4) | ((calib[29] >> 4) & 0x0F))
     digH.append(calib[31])
 
     for i in range(1, 2):
@@ -51,6 +53,7 @@ def get_calib_param():
         if digH[i] & 0x8000:
             digH[i] = (-digH[i] ^ 0xFFFF) + 1
 
+
 def compensate_T(adc_T):
     global t_fine
     v1 = (adc_T / 16384.0 - digT[0] / 1024.0) * digT[1]
@@ -58,13 +61,15 @@ def compensate_T(adc_T):
     t_fine = v1 + v2
     return t_fine / 5120.0
 
+
 def compensate_P(adc_P):
     global t_fine
     v1 = (t_fine / 2.0) - 64000.0
     v2 = (((v1 / 4.0)**2) / 2048) * digP[5]
     v2 += (v1 * digP[4]) * 2.0
     v2 = (v2 / 4.0) + (digP[3] * 65536.0)
-    v1 = (((digP[2] * ((v1 / 4.0)**2 / 8192)) / 8) + ((digP[1] * v1) / 2.0)) / 262144
+    v1 = (((digP[2] * ((v1 / 4.0)**2 / 8192)) / 8) +
+          ((digP[1] * v1) / 2.0)) / 262144
     v1 = ((32768 + v1) * digP[0]) / 32768
     if v1 == 0:
         return 0
@@ -77,6 +82,7 @@ def compensate_P(adc_P):
     v2 = ((pressure / 4.0) * digP[7]) / 8192.0
     pressure = pressure + ((v1 + v2 + digP[6]) / 16.0)
     return pressure / 100.0  # ﾂ・ｩ hPaﾂ単ﾂ位で返つｷ
+
 
 def read_pressure():
     data = [bus.read_byte_data(i2c_address, i) for i in range(0xF7, 0xF7+8)]
@@ -95,6 +101,7 @@ def setup():
     writeReg(0xF2, ctrl_hum_reg)
     writeReg(0xF4, ctrl_meas_reg)
     writeReg(0xF5, config_reg)
+
 
 # ﾂ渉可甘ｺﾂ可ｻ
 setup()

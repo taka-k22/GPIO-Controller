@@ -1,4 +1,5 @@
-import RPi.GPIO as GPIO
+# nanoka.py - Raspberry Piでモーターを制御するサンプルコード（無限）
+import RPi.GPIO as GPIO  # type: ignore
 import time
 
 # ピン番号の設定（BCM方式）
@@ -16,20 +17,24 @@ pwm2 = GPIO.PWM(AIN2, 100)
 pwm1.start(0)
 pwm2.start(0)
 
+
 def forward(speed=50):
     """前進"""
     pwm1.ChangeDutyCycle(speed)
     pwm2.ChangeDutyCycle(0)
+
 
 def backward(speed=50):
     """逆転"""
     pwm1.ChangeDutyCycle(0)
     pwm2.ChangeDutyCycle(speed)
 
+
 def stop():
     """停止（ブレーキではなく惰性停止）"""
     pwm1.ChangeDutyCycle(0)
     pwm2.ChangeDutyCycle(0)
+
 
 try:
     while True:

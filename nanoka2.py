@@ -1,3 +1,4 @@
+#標準入力からコマンドを受け取ってモーターを制御するサンプルコード（サーバは立てていない）
 import RPi.GPIO as GPIO
 import sys
 import time
@@ -16,17 +17,21 @@ pwm2 = GPIO.PWM(AIN2, 100)
 pwm1.start(0)
 pwm2.start(0)
 
+
 def forward(speed=70):
     pwm1.ChangeDutyCycle(speed)
     pwm2.ChangeDutyCycle(0)
+
 
 def backward(speed=70):
     pwm1.ChangeDutyCycle(0)
     pwm2.ChangeDutyCycle(speed)
 
+
 def stop():
     pwm1.ChangeDutyCycle(0)
     pwm2.ChangeDutyCycle(0)
+
 
 try:
     # 標準入力から受け取る（例: echo tear | python3 motor.py）
