@@ -3,8 +3,8 @@ import RPi.GPIO as GPIO  # type: ignore
 import time
 
 # ピン番号の設定（BCM方式）
-AIN1 = 17
-AIN2 = 18
+AIN1 = 20
+AIN2 = 21
 
 GPIO.setmode(GPIO.BCM)
 GPIO.setup(AIN1, GPIO.OUT)
