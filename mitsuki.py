@@ -1,3 +1,4 @@
+#motor_flask_hex
 from flask import Flask, request  # type: ignore
 import RPi.GPIO as GPIO  # type: ignore
 import time
@@ -54,10 +55,12 @@ def parse_mt_command(cmd: str):
 @app.route("/command", methods=["POST"])
 def handle_command():
 
-    command = (
-        request.data.decode("utf-8").strip()
-        or request.form.get("command", "").strip()
-    )
+    # raw body を優先して取得
+    command = request.get_data(as_text=True).strip()
+
+    # form送信にも対応
+    if not command:
+        command = request.form.get("command", "").strip()
 
     print(f"受信: {command}")
 
@@ -78,7 +81,6 @@ def handle_command():
         print(f"不明コマンド: {command}")
         stop()
         return f"Unknown command: {command}", 400
-
 
 @app.route("/")
 def home():
