@@ -5,11 +5,107 @@ import atexit
 import threading
 import time
 from flask import Flask, request  # type: ignore
+from werkzeug.exceptions import BadRequest  # type: ignore
 import RPi.GPIO as GPIO  # type: ignore
 import spidev  # type: ignore
 from smbus2 import SMBus  # type: ignore
 
 app = Flask(__name__)
+
+
+def is_plain_object(value):
+    return isinstance(value, dict)
+
+
+def has_exactly_keys(obj, keys):
+    return is_plain_object(obj) and set(obj.keys()) == set(keys)
+
+
+def error_response(message, status=400):
+    return {"error": message}, status
+
+
+def parse_json_request():
+    if not request.is_json:
+        raise ValueError("Request body must be JSON")
+
+    try:
+        payload = request.get_json()
+    except BadRequest:
+        raise ValueError("Request body must be valid JSON")
+
+    if not is_plain_object(payload):
+        raise ValueError("JSON body must be an object")
+
+    return payload
+
+
+def validate_uint8(value, name):
+    if type(value) is not int:
+        raise ValueError(f"{name} must be an integer")
+    if value < 0 or value > 255:
+        raise ValueError(f"{name} must be from 0 to 255")
+    return value
+
+
+def validate_tear_command(payload):
+    if not has_exactly_keys(payload, ("type", "params")):
+        raise ValueError("Motor command must contain exactly type and params")
+    if payload["type"] != "tear":
+        raise ValueError('Motor command type must be "tear"')
+
+    params = payload["params"]
+    if not has_exactly_keys(params, ("speed", "duration")):
+        raise ValueError("Motor params must contain exactly speed and duration")
+
+    speed = validate_uint8(params["speed"], "speed")
+    duration = validate_uint8(params["duration"], "duration")
+    return speed, duration
+
+
+def validate_led_command(payload):
+    if not has_exactly_keys(payload, ("type", "params")):
+        raise ValueError("LED command must contain exactly type and params")
+    if payload["type"] != "led_change":
+        raise ValueError('LED command type must be "led_change"')
+
+    params = payload["params"]
+    if not has_exactly_keys(params, ("color",)):
+        raise ValueError("LED params must contain exactly color")
+
+    color = params["color"]
+    if not isinstance(color, str):
+        raise ValueError("color must be a string")
+
+    hex_color_to_pwm(color)
+    return color.upper()
+
+
+def channel_to_pwm(value):
+    duty = round((value / 255.0) * 100, 1)
+    if duty.is_integer():
+        return int(duty)
+    return duty
+
+
+def hex_color_to_pwm(color):
+    if not isinstance(color, str):
+        raise ValueError("color must be a string")
+    if len(color) != 7 or color[0] != "#":
+        raise ValueError("color must be in #RRGGBB format")
+
+    try:
+        red_raw = int(color[1:3], 16)
+        green_raw = int(color[3:5], 16)
+        blue_raw = int(color[5:7], 16)
+    except ValueError:
+        raise ValueError("color must be in #RRGGBB format")
+
+    return {
+        "red": channel_to_pwm(red_raw),
+        "green": channel_to_pwm(green_raw),
+        "blue": channel_to_pwm(blue_raw),
+    }
 
 # ================================
 # BME280
@@ -253,42 +349,27 @@ def motor_stop():
     pwm2.ChangeDutyCycle(0)
 
 
-def parse_mt_command(cmd: str):
-    if not cmd.startswith("MT") or not cmd.endswith(";"):
-        return None
-
-    hexpart = cmd[2:-1]
-    if len(hexpart) != 6:
-        return None
-
-    try:
-        duty_raw = int(hexpart[0:2], 16)
-        time_raw = int(hexpart[2:4], 16)
-    except ValueError:
-        return None
-
-    duty = 40 + (duty_raw / 255.0) * 60
-    duration = time_raw
-    return duty, duration
-
-
 @app.route("/motor/command", methods=["POST"])
 def handle_motor_command():
-    command = request.get_data(as_text=True).strip()
-    if not command:
-        command = request.form.get("command", "").strip()
-
-    parsed = parse_mt_command(command)
-    if not parsed:
+    try:
+        payload = parse_json_request()
+        speed, duration = validate_tear_command(payload)
+    except ValueError as exc:
         motor_stop()
-        return {"error": f"Unknown command: {command}"}, 400
+        return error_response(str(exc))
 
-    duty, duration = parsed
+    duty = 40 + (speed / 255.0) * 60
     motor_forward(duty)
     time.sleep(duration)
     motor_stop()
 
-    return {"status": "OK", "duty": round(duty, 1), "time": duration}
+    return {
+        "status": "OK",
+        "type": "tear",
+        "speed": speed,
+        "duty": round(duty, 1),
+        "duration": duration,
+    }
 
 
 # ================================
@@ -352,49 +433,22 @@ def fade_worker():
         time.sleep(UPDATE_INTERVAL)
 
 
-def parse_lt_command(cmd: str):
-    if not cmd.startswith("LT") or not cmd.endswith(";"):
-        return None
-
-    hexpart = cmd[2:-1]
-    if len(hexpart) != 6:
-        return None
-
-    try:
-        code = int(hexpart[0:2], 16)
-    except ValueError:
-        return None
-
-    return code
-
-
-def apply_emotion(code):
-    if code == 0x01:
-        set_target_color(0, 0, 100)
-    elif code == 0x02:
-        set_target_color(100, 0, 0)
-    elif code == 0x03:
-        set_target_color(100, 0, 40)
-    elif code == 0x04:
-        set_target_color(0, 100, 0)
-    elif code == 0x05:
-        set_target_color(60, 0, 100)
-    else:
-        set_target_color(0, 0, 0)
-
-
 @app.route("/led/command", methods=["POST"])
 def handle_led_command():
-    command = request.get_data(as_text=True).strip()
-    if not command:
-        command = request.form.get("command", "").strip()
+    try:
+        payload = parse_json_request()
+        color = validate_led_command(payload)
+        pwm = hex_color_to_pwm(color)
+    except ValueError as exc:
+        return error_response(str(exc))
 
-    code = parse_lt_command(command)
-    if code is None:
-        return {"error": f"Unknown command: {command}"}, 400
-
-    apply_emotion(code)
-    return {"status": "OK", "code": code}
+    set_target_color(pwm["red"], pwm["green"], pwm["blue"])
+    return {
+        "status": "OK",
+        "type": "led_change",
+        "color": color,
+        "pwm": pwm,
+    }
 
 
 @app.route("/")
